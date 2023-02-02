@@ -1,6 +1,7 @@
 use crate::Error;
 use image::GenericImageView;
-use image::Rgba;
+use image::Pixel;
+use image::{Rgb, Rgba};
 
 use std::fs::File;
 use std::io::Write;
@@ -30,21 +31,21 @@ impl Tile {
 }
 
 pub struct Palette {
-	table: Vec<Rgba<u8>>,
+	table: Vec<Rgb<u8>>,
 }
 
 impl Palette {
 	pub fn new() -> Self {
-		Self { table: Vec::<Rgba<u8>>::new() }
+		Self { table: Vec::<Rgb<u8>>::new() }
 	}
 
-	pub fn insert(&mut self, color: &Rgba<u8>) {
+	pub fn insert(&mut self, color: &Rgb<u8>) {
 		self.table.push(*color);
 	}
 
 	pub fn get(&mut self, color: &Rgba<u8>) -> Option<usize> {
 		for (i, c) in self.table.iter().enumerate() {
-			if *c == *color {
+			if *c == color.to_rgb() {
 				return Some(i);
 			}
 		}
@@ -85,7 +86,7 @@ pub struct Config {
 	pub sub_width: u32,
 	pub sub_height: u32,
 	/// If set, maps a color to index 0 (transparent)
-	pub transparency_color: Option<Rgba<u8>>,
+	pub transparency_color: Option<Rgb<u8>>,
 	/// If the alpha channel is lower than this value, the color is transparent.
 	pub alpha_threshold: u8,
 }
@@ -110,8 +111,8 @@ impl Config {
 	}
 
 	/// Set a transparency color.
-	pub fn with_transparency_color(mut self, color: Rgba<u8>) -> Self {
-		self.transparency_color = Some(color);
+	pub fn with_transparency_color(mut self, r: u8, g: u8, b: u8) -> Self {
+		self.transparency_color = Some(Rgb([r, g, b]));
 		self
 	}
 
@@ -165,7 +166,7 @@ fn create_tile<T: GenericImageView<Pixel = Rgba<u8>>>(
 			}
 
 			if palette.get(&pixel).is_none() {
-				palette.insert(&pixel);
+				palette.insert(&pixel.to_rgb());
 			}
 			// Because we explicitly add missing colors above,
 			// this is safe to unwrap.

@@ -1,4 +1,5 @@
 pub mod convert;
+pub extern crate image;
 
 use image::ImageError;
 use std::fmt::{self, Display, Formatter};

@@ -1,6 +1,5 @@
 use evgfx::convert::{self, write_graphics};
 use evgfx::Error;
-use image::Rgba;
 use std::env::args;
 use std::process::exit;
 
@@ -20,7 +19,7 @@ fn cli() -> Result<(), Error> {
 
 	let (palettes, tiles) = convert::Config::new()
 		.with_tilesize(16, 16)
-		.with_transparency_color(Rgba::from([0x00, 0x00, 0x00, 0xFF]))
+		.with_transparency_color(0xFF, 0x00, 0xFF)
 		.splice_image(&image::open(input_path).map_err(|err| {
 			format!("Failed to open {output_path}: {err}")
 		})?);
