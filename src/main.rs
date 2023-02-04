@@ -1,5 +1,4 @@
-use evgfx::convert::{self, write_graphics};
-use evgfx::Error;
+use evgfx::{convert, Error, evgfx_error};
 use std::env::args;
 use std::process::exit;
 
@@ -7,10 +6,7 @@ fn cli() -> Result<(), Error> {
 	let args: Vec<String> = args().collect();
 
 	if args.len() != 4 {
-		return Err(Error::from(format!(
-			"Usage:\n\t{} input output palette",
-			args[0],
-		)));
+		return Err(evgfx_error!("Usage:\n\t{} input output palette", args[0]));
 	}
 
 	let input_path = &args[1];
@@ -20,11 +16,9 @@ fn cli() -> Result<(), Error> {
 	let (palettes, tiles) = convert::Config::new()
 		.with_tilesize(16, 16)
 		.with_transparency_color(0xFF, 0x00, 0xFF)
-		.splice_image(&image::open(input_path).map_err(|err| {
-			format!("Failed to open {output_path}: {err}")
-		})?);
+		.convert_image(input_path)?;
 
-	write_graphics(tiles, output_path)?;
+	tiles.write_4bpp(output_path)?;
 	palettes.write_rgb555(palette_path)?;
 
 	Ok(())

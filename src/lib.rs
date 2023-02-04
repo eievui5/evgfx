@@ -39,3 +39,9 @@ impl From<String> for Error {
 		}
 	}
 }
+
+#[macro_export] macro_rules! evgfx_error {
+	($($args:expr),+) => {
+		Error::from(format!($($args),+))
+	}
+}

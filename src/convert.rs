@@ -30,6 +30,29 @@ impl Tile {
 	}
 }
 
+pub struct TileAtlas {
+	pub atlas: Vec<Tile>
+}
+
+impl TileAtlas {
+	pub fn new() -> Self {
+		Self {
+			atlas: Vec::<Tile>::new(),
+		}
+	}
+
+	pub fn write_4bpp(&self, output_path: &str) -> Result<(), Error> {
+		let mut output = File::create(output_path).map_err(|err| {
+			format!("Failed to create: {output_path}: {err}")
+		})?;
+
+		for i in &self.atlas {
+			output.write(&i.convert_to_4bpp()?)?;
+		}
+		Ok(())
+	}
+}
+
 pub struct Palette {
 	table: Vec<Rgb<u8>>,
 }
@@ -111,6 +134,7 @@ impl Config {
 	}
 
 	/// Set a transparency color.
+	/// If defined, this effectively reserves palette 0, even if the color is unused.
 	pub fn with_transparency_color(mut self, r: u8, g: u8, b: u8) -> Self {
 		self.transparency_color = Some(Rgb([r, g, b]));
 		self
@@ -118,11 +142,12 @@ impl Config {
 
 	/// Convert an image into a list of palettes and indices.
 	/// The resulting `Tile`s may be converted into a particular format.
-	pub fn splice_image<T: GenericImageView<Pixel = Rgba<u8>>>(
-		&self,
-		img: &T,
-	) -> (Palette, Vec<Tile>) {
-		let mut tiles = Vec::<Tile>::new();
+	pub fn convert_image(&self, img_path: &str) -> Result<(Palette, TileAtlas), Error> {
+		let img = &image::open(img_path).map_err(|err| {
+			format!("Failed to open {img_path}: {err}")
+		})?;
+
+		let mut tiles = TileAtlas::new();
 		let mut palette = Palette::new();
 		if let Some(transparency_color) = self.transparency_color {
 			palette.insert(&transparency_color);
@@ -132,7 +157,7 @@ impl Config {
 			for tile_x in (0..img.width()).step_by(self.width as usize) {
 				for subtile_y in (tile_y..(tile_y + self.height)).step_by(self.sub_height as usize) {
 					for subtile_x in (tile_x..(tile_x + self.width)).step_by(self.sub_width as usize) {
-						tiles.push(create_tile(
+						tiles.atlas.push(create_tile(
 								*img.view(
 									subtile_x,
 									subtile_y,
@@ -146,7 +171,7 @@ impl Config {
 				}
 			}
 		}
-		(palette, tiles)
+		Ok((palette, tiles))
 	}
 }
 
@@ -174,15 +199,4 @@ fn create_tile<T: GenericImageView<Pixel = Rgba<u8>>>(
 		}
 	}
 	tile
-}
-
-pub fn write_graphics(tiles: Vec<Tile>, output_path: &str) -> Result<(), Error> {
-	let mut output = File::create(output_path).map_err(|err| {
-		format!("Failed to create: {output_path}: {err}")
-	})?;
-
-	for i in tiles {
-		output.write(&i.convert_to_4bpp()?)?;
-	}
-	Ok(())
 }
