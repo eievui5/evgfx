@@ -1,4 +1,5 @@
 use crate::Error;
+use crate::evgfx_error;
 use image::GenericImageView;
 use image::Pixel;
 use image::{Rgb, Rgba};
@@ -6,6 +7,7 @@ use image::{Rgb, Rgba};
 use std::fs::File;
 use std::io::Write;
 
+#[derive(PartialEq)]
 pub struct Tile {
 	indexes: Vec<usize>,
 }
@@ -31,7 +33,7 @@ impl Tile {
 }
 
 pub struct TileAtlas {
-	pub atlas: Vec<Tile>
+	atlas: Vec<Tile>
 }
 
 impl TileAtlas {
@@ -41,6 +43,18 @@ impl TileAtlas {
 		}
 	}
 
+	/// Attempts to add a tile to an atlas.
+	/// If the tile already exists, returns the index of the existing tile.
+	pub fn update(&mut self, new_tile: Tile) -> usize {
+		for (i, tile) in self.atlas.iter().enumerate() {
+			if *tile == new_tile {
+				return i;
+			}
+		}
+		self.atlas.push(new_tile);
+		self.atlas.len() - 1
+	}
+
 	pub fn write_4bpp(&self, output_path: &str) -> Result<(), Error> {
 		let mut output = File::create(output_path).map_err(|err| {
 			format!("Failed to create: {output_path}: {err}")
@@ -48,6 +62,34 @@ impl TileAtlas {
 
 		for i in &self.atlas {
 			output.write(&i.convert_to_4bpp()?)?;
+		}
+		Ok(())
+	}
+}
+
+pub struct TileMap {
+	map: Vec<Vec<usize>>,
+}
+
+impl TileMap {
+	pub fn new() -> Self {
+		Self {
+			map: Vec::new(),
+		}
+	}
+
+	pub fn write_8bit(&self, output_path: &str) -> Result<(), Error> {
+		let mut output = File::create(output_path).map_err(|err| {
+			format!("Failed to create: {output_path}: {err}")
+		})?;
+
+		for i in &self.map {
+			for i in i {
+				if *i >= u8::MAX as usize {
+					return Err(evgfx_error!("Too many tiles: index {i} is too large for an 8-bit map"));
+				}
+				output.write(&[*i as u8])?;
+			}
 		}
 		Ok(())
 	}
@@ -75,12 +117,18 @@ impl Palette {
 		None
 	}
 
-	pub fn write_rgb555(&self, output_path: &str) -> Result<(), Error> {
+	pub fn write_rgb555(&self, output_path: &str, skip_first: bool) -> Result<(), Error> {
 		let mut output = File::create(output_path).map_err(|err| {
 			format!("Failed to create: {output_path}: {err}")
 		})?;
 
-		for i in &self.table {
+		let table = if skip_first {
+			&self.table[1..self.table.len()]
+		} else {
+			&self.table
+		};
+
+		for i in table {
 			output.write(
 				&(
 					(i.0[0] as u16) >> 3
@@ -142,11 +190,12 @@ impl Config {
 
 	/// Convert an image into a list of palettes and indices.
 	/// The resulting `Tile`s may be converted into a particular format.
-	pub fn convert_image(&self, img_path: &str) -> Result<(Palette, TileAtlas), Error> {
+	pub fn convert_image(&self, img_path: &str) -> Result<(Palette, TileAtlas, TileMap), Error> {
 		let img = &image::open(img_path).map_err(|err| {
 			format!("Failed to open {img_path}: {err}")
 		})?;
 
+		let mut tilemap = TileMap::new();
 		let mut tiles = TileAtlas::new();
 		let mut palette = Palette::new();
 		if let Some(transparency_color) = self.transparency_color {
@@ -156,22 +205,26 @@ impl Config {
 		for tile_y in (0..img.height()).step_by(self.height as usize) {
 			for tile_x in (0..img.width()).step_by(self.width as usize) {
 				for subtile_y in (tile_y..(tile_y + self.height)).step_by(self.sub_height as usize) {
+					tilemap.map.push(Vec::new());
 					for subtile_x in (tile_x..(tile_x + self.width)).step_by(self.sub_width as usize) {
-						tiles.atlas.push(create_tile(
-								*img.view(
-									subtile_x,
-									subtile_y,
-									self.sub_width,
-									self.sub_height,
-								),
-								&mut palette,
-								self.alpha_threshold,
-						));
+						let tile = create_tile(
+							*img.view(
+								subtile_x,
+								subtile_y,
+								self.sub_width,
+								self.sub_height,
+							),
+							&mut palette,
+							self.alpha_threshold,
+						);
+						let index = tiles.update(tile);
+						let last_row = tilemap.map.len() - 1;
+						tilemap.map[last_row].push(index);
 					}
 				}
 			}
 		}
-		Ok((palette, tiles))
+		Ok((palette, tiles, tilemap))
 	}
 }
 
