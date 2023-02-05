@@ -45,10 +45,12 @@ impl TileAtlas {
 
 	/// Attempts to add a tile to an atlas.
 	/// If the tile already exists, returns the index of the existing tile.
-	pub fn update(&mut self, new_tile: Tile) -> usize {
-		for (i, tile) in self.atlas.iter().enumerate() {
-			if *tile == new_tile {
-				return i;
+	pub fn update(&mut self, new_tile: Tile, deduplicate_tiles: bool) -> usize {
+		if deduplicate_tiles {
+			for (i, tile) in self.atlas.iter().enumerate() {
+				if *tile == new_tile {
+					return i;
+				}
 			}
 		}
 		self.atlas.push(new_tile);
@@ -160,6 +162,7 @@ pub struct Config {
 	pub transparency_color: Option<Rgb<u8>>,
 	/// If the alpha channel is lower than this value, the color is transparent.
 	pub alpha_threshold: u8,
+	pub deduplicate_tiles: bool,
 }
 
 impl Config {
@@ -171,6 +174,7 @@ impl Config {
 			sub_height: 8,
 			transparency_color: None,
 			alpha_threshold: 128, // half seems good???
+			deduplicate_tiles: false,
 		}
 	}
 
@@ -185,6 +189,11 @@ impl Config {
 	/// If defined, this effectively reserves palette 0, even if the color is unused.
 	pub fn with_transparency_color(mut self, r: u8, g: u8, b: u8) -> Self {
 		self.transparency_color = Some(Rgb([r, g, b]));
+		self
+	}
+
+	pub fn with_deduplicate_tiles(mut self, value: bool) -> Self {
+		self.deduplicate_tiles = value;
 		self
 	}
 
@@ -217,7 +226,7 @@ impl Config {
 							&mut palette,
 							self.alpha_threshold,
 						);
-						let index = tiles.update(tile);
+						let index = tiles.update(tile, self.deduplicate_tiles);
 						let last_row = tilemap.map.len() - 1;
 						tilemap.map[last_row].push(index);
 					}
